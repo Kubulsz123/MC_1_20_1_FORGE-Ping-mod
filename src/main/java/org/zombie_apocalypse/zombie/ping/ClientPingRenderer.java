@@ -8,6 +8,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -62,25 +63,29 @@ public class ClientPingRenderer {
         Font font = Minecraft.getInstance().font;
         MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 
+        // Pobieramy instancję gracza do obliczeń odległości
+        Player player = Minecraft.getInstance().player;
+
         poseStack.pushPose();
         poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
         for (PingInstance ping : ACTIVE_PINGS) {
-            double distance = cameraPos.distanceTo(ping.pos);
+            // Dystans kamery używany do zachowania stałego rozmiaru na ekranie
+            double cameraDistance = cameraPos.distanceTo(ping.pos);
+
+            // Dystans gracza używany do wyświetlania tekstu metrów (zabezpieczony przed null)
+            double playerDistance = player != null ? player.position().distanceTo(ping.pos) : cameraDistance;
 
             poseStack.pushPose();
             poseStack.translate(ping.pos.x, ping.pos.y + 1.2, ping.pos.z);
             poseStack.mulPose(camera.rotation());
 
-            // MATH FOR CONSTANT SCALE: Multiply distance by a base factor.
-            // 0.03f makes it roughly 6% smaller than the previous static size at medium range.
-            float scale = (float) distance * 0.03f;
-
-            // Prevent it from becoming microscopic if you stand exactly on top of it
+            // Skalowanie na podstawie pozycji kamery (stały rozmiar w F5)
+            float scale = (float) cameraDistance * 0.03f;
             scale = Math.max(0.4f, scale);
             poseStack.scale(-scale, -scale, scale);
 
-            // 1. Draw the PNG Texture
+            // 1. Rysowanie tekstury PNG
             Matrix4f matrix = poseStack.last().pose();
             buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
             buffer.vertex(matrix, -1, -1, 0).uv(0, 0).endVertex();
@@ -89,21 +94,19 @@ public class ClientPingRenderer {
             buffer.vertex(matrix,  1, -1, 0).uv(1, 0).endVertex();
             tesselator.end();
 
-            // 2. Draw the Distance Text
+            // 2. Rysowanie tekstu z odległością (bierzemy playerDistance!)
             poseStack.pushPose();
-            // Scale the text down relative to the image
             poseStack.scale(0.06f, 0.06f, 0.06f);
-            String distText = String.format("%.1f m", distance);
+            String distText = String.format("%.1f m", playerDistance);
             float textWidth = font.width(distText);
 
-            // Draw text slightly above the icon (Y offset: -25)
             font.drawInBatch(distText, -textWidth / 2.0F, -25.0F, 0xFFFFFF, true, poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, 0, 15728880);
             poseStack.popPose();
 
             poseStack.popPose();
         }
 
-        bufferSource.endBatch(); // Force text render immediately
+        bufferSource.endBatch();
         poseStack.popPose();
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
