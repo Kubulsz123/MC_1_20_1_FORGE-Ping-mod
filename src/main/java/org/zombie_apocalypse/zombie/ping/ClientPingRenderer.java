@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -55,7 +56,12 @@ public class ClientPingRenderer {
         RenderSystem.setShaderTexture(0, PING_TEXTURE);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
+
+        // --- KLUCZOWA ZMIANA ---
+        // depthMask(false) zapobiega nadpisywaniu bufora głębokości przez ping.
+        // disableDepthTest() sprawia, że silnik ignoruje bloki przed pingiem i rysuje go NA WIERZCHU wszystkiego.
         RenderSystem.depthMask(false);
+        RenderSystem.disableDepthTest();
 
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder buffer = tesselator.getBuilder();
@@ -63,29 +69,24 @@ public class ClientPingRenderer {
         Font font = Minecraft.getInstance().font;
         MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 
-        // Pobieramy instancję gracza do obliczeń odległości
         Player player = Minecraft.getInstance().player;
 
         poseStack.pushPose();
         poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
         for (PingInstance ping : ACTIVE_PINGS) {
-            // Dystans kamery używany do zachowania stałego rozmiaru na ekranie
             double cameraDistance = cameraPos.distanceTo(ping.pos);
-
-            // Dystans gracza używany do wyświetlania tekstu metrów (zabezpieczony przed null)
             double playerDistance = player != null ? player.position().distanceTo(ping.pos) : cameraDistance;
 
             poseStack.pushPose();
             poseStack.translate(ping.pos.x, ping.pos.y + 1.2, ping.pos.z);
             poseStack.mulPose(camera.rotation());
 
-            // Skalowanie na podstawie pozycji kamery (stały rozmiar w F5)
-            float scale = (float) cameraDistance * 0.03f;
+            float scale = (float) cameraDistance * 0.12f;
             scale = Math.max(0.4f, scale);
             poseStack.scale(-scale, -scale, scale);
 
-            // 1. Rysowanie tekstury PNG
+            // 1. Rysowanie grafiki PNG
             Matrix4f matrix = poseStack.last().pose();
             buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
             buffer.vertex(matrix, -1, -1, 0).uv(0, 0).endVertex();
@@ -94,7 +95,7 @@ public class ClientPingRenderer {
             buffer.vertex(matrix,  1, -1, 0).uv(1, 0).endVertex();
             tesselator.end();
 
-            // 2. Rysowanie tekstu z odległością (bierzemy playerDistance!)
+            // 2. Rysowanie tekstu odległości
             poseStack.pushPose();
             poseStack.scale(0.06f, 0.06f, 0.06f);
             String distText = String.format("%.1f m", playerDistance);
@@ -106,8 +107,13 @@ public class ClientPingRenderer {
             poseStack.popPose();
         }
 
+        // Bardzo ważne: najpierw rysujemy napisy z bufora (endBatch), dopóki test głębokości jest wyłączony!
         bufferSource.endBatch();
         poseStack.popPose();
+
+        // --- PRZYWRACANIE USTAWIEŃ MINECRAFTA ---
+        // Musimy włączyć test głębokości z powrotem, inaczej cała reszta świata (np. dłoń gracza, chmury, interfejs) zacznie się glitchować.
+        RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
     }
