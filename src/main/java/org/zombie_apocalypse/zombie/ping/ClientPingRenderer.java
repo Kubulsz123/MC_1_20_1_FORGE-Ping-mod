@@ -12,7 +12,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -57,9 +56,6 @@ public class ClientPingRenderer {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        // --- KLUCZOWA ZMIANA ---
-        // depthMask(false) zapobiega nadpisywaniu bufora głębokości przez ping.
-        // disableDepthTest() sprawia, że silnik ignoruje bloki przed pingiem i rysuje go NA WIERZCHU wszystkiego.
         RenderSystem.depthMask(false);
         RenderSystem.disableDepthTest();
 
@@ -82,11 +78,11 @@ public class ClientPingRenderer {
             poseStack.translate(ping.pos.x, ping.pos.y + 1.2, ping.pos.z);
             poseStack.mulPose(camera.rotation());
 
-            float scale = (float) cameraDistance * 0.12f;
+            float scale = (float) cameraDistance * 0.03f;
             scale = Math.max(0.4f, scale);
             poseStack.scale(-scale, -scale, scale);
 
-            // 1. Rysowanie grafiki PNG
+            // 1. Rysowanie grafiki PNG (nadal bez testu głębokości)
             Matrix4f matrix = poseStack.last().pose();
             buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
             buffer.vertex(matrix, -1, -1, 0).uv(0, 0).endVertex();
@@ -101,18 +97,16 @@ public class ClientPingRenderer {
             String distText = String.format("%.1f m", playerDistance);
             float textWidth = font.width(distText);
 
-            font.drawInBatch(distText, -textWidth / 2.0F, -25.0F, 0xFFFFFF, true, poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, 0, 15728880);
+            // ZMIANA: Zamiast Font.DisplayMode.NORMAL dajemy Font.DisplayMode.SEE_THROUGH
+            font.drawInBatch(distText, -textWidth / 2.0F, -25.0F, 0xFFFFFF, true, poseStack.last().pose(), bufferSource, Font.DisplayMode.SEE_THROUGH, 0, 15728880);
             poseStack.popPose();
 
             poseStack.popPose();
         }
 
-        // Bardzo ważne: najpierw rysujemy napisy z bufora (endBatch), dopóki test głębokości jest wyłączony!
         bufferSource.endBatch();
         poseStack.popPose();
 
-        // --- PRZYWRACANIE USTAWIEŃ MINECRAFTA ---
-        // Musimy włączyć test głębokości z powrotem, inaczej cała reszta świata (np. dłoń gracza, chmury, interfejs) zacznie się glitchować.
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
