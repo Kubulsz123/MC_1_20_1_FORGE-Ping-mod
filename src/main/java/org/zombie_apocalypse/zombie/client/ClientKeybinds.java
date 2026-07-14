@@ -37,7 +37,7 @@ public class ClientKeybinds {
 
                 if (player != null) {
                     // Calculate max distance based on user's video settings (render distance in chunks * 16 blocks)
-                    double renderDistance = mc.options.getRenderDistance().get() * 16.0;
+                    double renderDistance = mc.options.renderDistance().get() * 16.0;
 
                     Vec3 eyePosition = player.getEyePosition();
                     Vec3 lookVector = player.getViewVector(1.0F);
